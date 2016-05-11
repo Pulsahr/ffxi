@@ -50,10 +50,6 @@ Insert the following code :
 
 4. EDITING EXISTING FUNCTION
 
-- edit or add the function job_precast(spell, action, spellMap, eventArgs) and add this line at the beginning :
-buffWatcher.casting = true
-- edit or add the function job_aftercast(spell, action, spellMap, eventArgs) and add this line at the beginning :
-buffWatcher.casting = false
 - edit or add the function job_buff_change(buff, gain), and add the following lines :
 
   for index,value in pairs(buffWatcher.watchList) do
@@ -103,7 +99,6 @@ Solutions : relaunch your buffWatcher macro or wait for a buff to be added (cast
 
 
 buffWatcher = {}
-buffWatcher.casting = false
 buffWatcher.active = false
 buffWatcher.option = ''
 
@@ -164,13 +159,6 @@ function buffWatch(startWatching, option)
     option=''
   else
     option = tostring(option)
-  end
-
-  -- already casting something, retry in 5 seconds
-  if(buffWatcher.casting==true) and (buffWatcher.active==true) then
-    send_command('wait 5; gs c buffWatch '..tostring(startWatching)..' '..option)
-    add_to_chat(200,'buffWatcher notice : you are busy casting something, postponing')
-    return
   end
 
 -- INTIALIZE

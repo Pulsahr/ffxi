@@ -48,14 +48,6 @@ function job_buff_change(buff, gain)
   end
 end
 
-function job_precast(spell, action, spellMap, eventArgs)
-buffWatcher.casting = true
-end
-
-function job_aftercast(spell, action, spellMap, eventArgs)
-buffWatcher.casting = false
-end
-
 --------------------------------------
 -- ERRLOG
 --------------------------------------
