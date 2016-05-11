@@ -19,18 +19,7 @@ Same for status info file :
 include('common_info.status.lua')
 
 
-2. ADDING FUNCTIONS
-
-the function errlog is required to display some error in the ingame chat. If you don't have it, paste the following lines at the bottom of your JOB.lua file.
---------------------------------------
--- ERRLOG
---------------------------------------
-function errlog(msg) 
-	add_to_chat(167,msg)
-end
-
-
-3. CUSTOM COMMAND
+2. CUSTOM COMMAND
 
 You need to add the custom command for calling the buffWatcher function.
 Find the "job_self_command" in your main script. If it doesn't exist, create it as follow :
@@ -48,7 +37,7 @@ Insert the following code at the start of the function :
   end
   
 
-4. EDITING EXISTING FUNCTION
+3. EDITING EXISTING FUNCTION
 
 - edit or add the function job_buff_change(buff, gain), and add the following 6 lines :
 
@@ -60,7 +49,7 @@ Insert the following code at the start of the function :
   end
 
   
-5. SETTING THE WATCH LIST
+4. SETTING THE WATCH LIST
  
  See the CONFIGURATION section, below, when the code starts, you won't miss it.
  
