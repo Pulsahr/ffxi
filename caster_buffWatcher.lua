@@ -38,7 +38,7 @@ function job_self_command(cmdParams, eventArgs)
 -- insert code here
 end
 
-Insert the following code :
+Insert the following code at the start of the function :
 
   if cmdParams[1] == 'buffWatcher' then
 	  buffWatch(cmdParams[2],cmdParams[3])
@@ -50,7 +50,7 @@ Insert the following code :
 
 4. EDITING EXISTING FUNCTION
 
-- edit or add the function job_buff_change(buff, gain), and add the following lines :
+- edit or add the function job_buff_change(buff, gain), and add the following 6 lines :
 
   for index,value in pairs(buffWatcher.watchList) do
     if index==buff then
@@ -111,12 +111,13 @@ Each buff to watch must be present here like : ["buff name"]="spell to cast",
 Make sure you have the id in the common_info.status.lua file, or the cancel option won't cancel it (it might be a way to prevent canceling some buffs too).
 
 MULTIPLE JOBS :
-if you want to use buffWatcher on multiple jobs, and have different watchlists, move the buffWatcher.watchList definition below to your job file, in the end.
+if you want to use buffWatcher on multiple jobs, and have different watchlists, copy the buffWatcher.watchList definition below to your job file, right after your include('caster_buffWatcher.lua'), in the job_setup function.
 For instance, in your SCH job file :
 buffWatcher.watchList = {["Protect"]="Protect V"}
 and in your WHM file :
 buffWatcher.watchList = {["Protect"]="Protectra V"}
-Don't forget to remove the lines here, so it won't overwrite yours from your job file.
+
+You can leave the following lines for a default value.
 --]]
 buffWatcher.watchList = {
                         ["Aquaveil"]="Aquaveil",
