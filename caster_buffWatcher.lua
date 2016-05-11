@@ -15,8 +15,6 @@ Doesn't wait uselessly after an instant or shortened cast.
 
 include this file in your SCH gearswap by copying it in addons/GearSwap/data/ and put at the bottom of your job_setup function :
 include('caster_buffWatcher.lua')
-Same for status info file :
-include('common_info.status.lua')
 
 
 2. CUSTOM COMMAND
@@ -30,7 +28,7 @@ end
 Insert the following code at the start of the function :
 
   if cmdParams[1] == 'buffWatcher' then
-	  buffWatch(cmdParams[2],cmdParams[3])
+	  buffWatch(cmdParams[2])
   end
   if cmdParams[1] == 'stopBuffWatcher' then
 	  stopBuffWatcher()
@@ -58,12 +56,9 @@ Insert the following code at the start of the function :
 -- USAGE EXAMPLES
 -- #########################
 /console gs c buffWatcher true
-=> will start your buffWatcher routine, without canceling nor overwriting existing buffs.
-/console gs c buffWatcher true cancel
-=> will start your buffWatcher routine, canceling each buff on the watch list.
-/console gs c buffWatcher true overwrite
-=> will start your buffWatcher routine, overwriting spells without canceling.
-/!\ Warning : overwriting doesn't trigger buff change nor buffWatch, use "//gs c buffWatch" to move forward. That's an option requested, I don't recommand using it.
+=> will start your buffWatcher routine.
+/console gs c buffWatcher
+=> will act like an automatic call from job_buff_change. Only useful if you interrupted a spell cast by the buff watcher. Don't bother using this, make only one macro like the first example.
 
  
 
@@ -71,7 +66,7 @@ Insert the following code at the start of the function :
 -- INFORMATION
 -- #########################
 This file contains only the functions required for the buffWatcher command :
-buffWatcher variables required
+buffWatcher required variables
 function buffWatch
 function stopBuffWatcher
 
@@ -81,7 +76,12 @@ function stopBuffWatcher
 -- KNOWN ISSUES
 -- #########################
 1. If you get interrupted while casting a buff launched by buffWatcher, nothing happens anymore.
-Solutions : relaunch your buffWatcher macro or wait for a buff to be added (cast it ?) or to wear off. buffWatcher waits for a buff update to go next step.
+Solutions : use buffWatcher false to step forward, or don't bother and reuse your general buffWatcher macro.
+
+2. The order is not like I entered it
+Bad news : I can't change anything to this, or I need the user to make two arrays, and I need to add lots of boring controls.
+Technical reason : the way LUA manage arrays indexed with names (instead of numeric index), is not well controlled, and seems dependent on where the free memory is. If you do some stuff in game, and reload gearwap, and recall your buffWatcher, the order might change, despite the fact you changed nothing in the files. Yep.
+If anyone comes with a simple solution, feel free to contact me, I'll gladly implement it and give credit.
 --]]
 
 
@@ -89,7 +89,6 @@ Solutions : relaunch your buffWatcher macro or wait for a buff to be added (cast
 
 buffWatcher = {}
 buffWatcher.active = false
-buffWatcher.option = ''
 
 --------------------------------------
 -- CONFIGURATION
@@ -97,7 +96,6 @@ buffWatcher.option = ''
 --[[
 You can add/remove buffs to your liking.
 Each buff to watch must be present here like : ["buff name"]="spell to cast",
-Make sure you have the id in the common_info.status.lua file, or the cancel option won't cancel it (it might be a way to prevent canceling some buffs too).
 
 MULTIPLE JOBS :
 if you want to use buffWatcher on multiple jobs, and have different watchlists, copy the buffWatcher.watchList definition below to your job file, right after your include('caster_buffWatcher.lua'), in the job_setup function.
@@ -110,10 +108,8 @@ You can leave the following lines for a default value.
 --]]
 buffWatcher.watchList = {
                         ["Aquaveil"]="Aquaveil",
-                        ["Stoneskin"]="Stoneskin",
                         ["Haste"]="Haste",
-                        --["Firestorm"]="Firestorm",
-                        --["Klimaform"]="Klimaform",
+                        ["Stoneskin"]="Stoneskin",
                         --["Phalanx"]="Phalanx",
                         --["Protect"]="Protect V",
                         --["Shell"]="Shell V",
@@ -124,13 +120,11 @@ buffWatcher.watchList = {
 -- buffWatch
 --------------------------------------
 --[[
-If you don't like the chat informations ingame, comment the lines starting with "add_to_chat".
+If you don't like the informations displayed in ingame chat, comment the lines starting with "add_to_chat".
 
-@param bool startWatching : if true, start the buffWatch routine. If false, acts like an auto update.
-@param bool option : 'overwrite' | 'cancel' : if you plan to use cancel option, be sure to have id status in common_info.status.lua for every watched spell you want to cancel.
-                                              if you use overwrite, the spell will be added to the todo list, but overwriting doesn't trigger next step. Use "//gs c buffWatch" to move forward.
+@param bool startWatching : if true, start the buffWatch routine from the beginning. If false or no value, acts like an auto update.
 --]]
-function buffWatch(startWatching, option)
+function buffWatch(startWatching)
 -- panic cancel, or cannot cast, we stop right there
   if(player.status=='Resting') then
     stopBuffWatcher()
@@ -145,32 +139,24 @@ function buffWatch(startWatching, option)
     startWatching=false
   end
   
-  if not option then
-    option=''
-  else
-    option = tostring(option)
-  end
-
 -- INTIALIZE
   local infobuffs = ''
   if(startWatching==true) then 
     add_to_chat(200,'========== BUFF WATCHER activated ==========')
     buffWatcher.todo = {}
     buffWatcher.active = true
-    buffWatcher.option = option
     infobuffs = 'Watch list :'
     for buff,spell in pairs(buffWatcher.watchList) do
       table.insert(buffWatcher.todo,buff)
       infobuffs = infobuffs..' '..buff
     end
+
     
     add_to_chat(200,infobuffs)
   else
     -- called with job_buff_change
     if buffWatcher.active == false then
       return
-    else
-      option = buffWatcher.option
     end
   end
 
@@ -178,23 +164,14 @@ function buffWatch(startWatching, option)
   local active = false -- true if the buff is already active
   local goCast = false -- true if we want the spell to be cast
   
-  local todoSize = 0
-  if(buffWatcher.todo ~= nil) then
-    todoSize = table.getn(buffWatcher.todo)
-  else return
-  end
 
-  buff = table.remove(buffWatcher.todo)
+  buff = table.remove(buffWatcher.todo,1)
   local iteration = 1
   while (buff~=nil) do
     goCast = false
     active = buffactive[buff] or false
 
-    if(active) and (option=='cancel') and (info.status[buff]~=nil) then
-      windower.ffxi.cancel_buff(info.status[buff])
-      goCast = true
-    end
-    if(not active) or (option=='overwrite') then
+    if(not active) then
       goCast = true
     end
 
@@ -210,10 +187,10 @@ function buffWatch(startWatching, option)
       return -- we stop here, next step will be called when this buff we are casting is on
     end
 
-  buff = table.remove(buffWatcher.todo)
+  buff = table.remove(buffWatcher.todo,1)
   iteration = iteration+1
-  if(iteration>10) then return end
-  end -- WHILE
+  if(iteration>10) then return end -- failsafe for excessive amount of watched buffs
+  end -- LOOP
 
   add_to_chat(200,'========== BUFF WATCHER done ==========')
   buffWatcher.active=false
