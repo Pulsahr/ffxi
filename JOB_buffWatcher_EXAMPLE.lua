@@ -8,7 +8,6 @@ end
 function job_setup()
 
 
-  include('common_info.status.lua')
   include('caster_buffWatcher.lua')
 end
 
@@ -46,11 +45,4 @@ function job_buff_change(buff, gain)
       buffWatch()
     end
   end
-end
-
---------------------------------------
--- ERRLOG
---------------------------------------
-function errlog(msg) 
-	add_to_chat(167,msg)
 end
