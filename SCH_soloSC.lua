@@ -110,6 +110,7 @@ Usage example :
 /console gs c soloSC 1 Fusion true
 => will do 1 SC Fusion, but nothing displayed in party chat
 --]]
+print('====== TODO : en cas de dark arts, pas le temps pour immanence.')
 function soloSkillchain(nbSC,elementEnd,STFU)
 --**************************************************
 -- CONSTANTS
@@ -164,7 +165,7 @@ add_to_chat(200,'========== soloSkillchain ==========')
       if nbSC>4 then
         errlog("Shitty parameters : soloSkillchain("..tostring(nbSC)..","..tostring(elementEnd)..")")
         return
-	  elseif (nbSC==2 and nbStrat < 3) or (nbSC==3 and nbStrat < 4) or (nbSC==4 and nbStrat < 5) then
+	  elseif (nbSC >= nbStrat) then
         errlog("Not enough stratagems for "..tostring(nbSC).." skillchain"..plural.." : "..tostring(nbStrat)..'/'..tostring(nbSC+1))
         return
       end --if nbSC>4
@@ -255,7 +256,7 @@ add_to_chat(200,'========== soloSkillchain ==========')
   if (i==3) then
 	  wait.windowMB = 6
 	elseif (i==4) then
-	  wait.windowMB = 5
+	  wait.windowMB = 4
 	end
 
 	wait.beforeNextSpell = spellsSC[i].castTime -- between "/p MB NOW !" and next Immanence
