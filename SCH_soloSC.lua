@@ -206,6 +206,8 @@ add_to_chat(200,'========== soloSkillchain ==========')
       return
     else
       commandSoloSC = commandSoloSC..'input /ja "Dark Arts" <me>;wait 1.5;'
+      -- we deactivate MB option, to not mess with stratagem count expected by player
+      MB = false
     end
   end  
   
