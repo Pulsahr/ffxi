@@ -100,8 +100,11 @@ Each buff to watch must be present here like : ["buff name"]="spell to cast",
 MULTIPLE JOBS :
 if you want to use buffWatcher on multiple jobs, and have different watchlists, copy the buffWatcher.watchList definition below to your job file, right after your include('caster_buffWatcher.lua'), in the job_setup function.
 For instance, in your SCH job file :
+include('caster_buffWatcher.lua')
 buffWatcher.watchList = {["Protect"]="Protect V"}
+
 and in your WHM file :
+include('caster_buffWatcher.lua')
 buffWatcher.watchList = {["Protect"]="Protectra V"}
 
 You can leave the following lines for a default value.
@@ -191,15 +194,26 @@ function buffWatch(startWatching)
   iteration = iteration+1
   if(iteration>10) then return end -- failsafe for excessive amount of watched buffs
   end -- LOOP
+  
+  -- Sublimation for SCH
+  if (player.main_job=='SCH') or (player.sub_job=='SCH') then
+    state.Buff['Sublimation: Activated'] = buffactive['Sublimation: Activated'] or false
+    state.Buff['Sublimation: Complete'] = buffactive['Sublimation: Complete'] or false
+    if (not state.Buff['Sublimation: Activated']) and (not state.Buff['Sublimation: Complete']) and (player.hpp > 51) then
+      send_command('wait 2;input /ja Sublimation <me>;')
+    end
+  end
+  
 
   add_to_chat(200,'========== BUFF WATCHER done ==========')
   buffWatcher.active=false
+  
 
 end -- manageBuffs
 
 -- to stop the buffWatcher
 function stopBuffWatcher()
-  add_to_chat(debug.color.warn,'buffWatcher canceled')
+  add_to_chat(182,'buffWatcher canceled')
   buffWatcher.todo = {}
   buffWatcher.active = false
 end

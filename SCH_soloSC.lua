@@ -29,7 +29,7 @@ function getNbStratagems()
     local allRecasts = windower.ffxi.get_ability_recasts()
     local stratsRecast = allRecasts[231]
     local maxStrategems = math.floor((player.main_job_level + 10) / 20)
-    local fullRechargeTime = 4*60
+    local fullRechargeTime = 4*60 -- change 60 with 45 if you have unlocked the job point gift on stratagem recast
     local currentCharges = math.floor(maxStrategems - maxStrategems * stratsRecast / fullRechargeTime)
     return currentCharges
 end
@@ -56,7 +56,7 @@ Insert the following code :
       errlog('missing required parameters for function soloSkillchain')
       return
     else
-      soloSkillchain(cmdParams[2],cmdParams[3],cmdParams[4])
+      soloSkillchain(cmdParams[2],cmdParams[3],cmdParams[4],cmdParams[5])
     end
   end
  
@@ -89,7 +89,10 @@ You need some time after a helix to be able to skillchain. If your cast time is 
 My hypothesis : it needs the first tick of dot before the next immannenced spell lands. Didn't check. Don't plan to. Feel free to !
 
 2. getStratagems function doesn't work correctly
-You probably have a decreased recast time on your stratagems. If you leave it as is, you won't have error, but might be incorrectly rejected for a lack of stratagems. Tune the function, replace it with a working one, or leave it as is, your call.
+You probably have a decreased recast time on your stratagems. If you leave it as is, you won't have error, but might be incorrectly rejected for a lack of stratagems. Replace the 60 with 45 as said in the comment on the desired line.
+
+3. The last skillchain didn't happen
+You probably made a long skillchain combo (3 ?), and the last one was a bit off the skillchain window. Tune your cast time, or reduce your number of SC.
 --]]
 
 --------------------------------------
@@ -97,21 +100,23 @@ You probably have a decreased recast time on your stratagems. If you leave it as
 --------------------------------------
 --[[
 @param integer|string nbSC : Number of SkillChains to do, between 1 and 3 or "max".
-@param string elementEnd : Final SC element (Fusion, Scission, ...).
+@param string elementEnd : final SC element (Fusion, Scission, ...).
+@param bool MB : if true, will cast the tier V corresponding to the MB. Default is false.
 @param bool STFU : if true, no message in party. Default is false.
 
 Usage example : 
 /console gs c soloSC 1 Fusion
-=> will do 1 skillchain, ending with Fusion : Fire, Thunder
+=> will do 1 skillchain, ending with Fusion : Fire, Thunder. Equivalent to /console gs c soloSC 1 Fusion false false
 /console gs soloSC 3 Fragmentation
 => will do 3 skillchains, ending with Fragmentation : Stone, Water, Blizzard, Water
 /console gs soloSC max Fusion
 => will spend all stratagems to perform skillchains, ending with Fusion
 /console gs c soloSC 1 Fusion true
-=> will do 1 SC Fusion, but nothing displayed in party chat
+=> will do 1 SC Fusion, and cast Fire V for magic burst
+/console gs c soloSC 1 Fusion true true
+=> will do 1 SC Fusion and cast Fire V for magic burst, with no information displayed in party chat
 --]]
-print('====== TODO : en cas de dark arts, pas le temps pour immanence.')
-function soloSkillchain(nbSC,elementEnd,STFU)
+function soloSkillchain(nbSC,elementEnd,MB,STFU)
 --**************************************************
 -- CONSTANTS
 -- If you have access to helix II and are ok to use them, set to true
@@ -127,6 +132,14 @@ add_to_chat(200,'========== soloSkillchain ==========')
     STFU=true
   else
     STFU=false
+  end
+  
+  if not MB then
+    MB=false
+  elseif MB=='true' then
+    MB=true
+  else
+    MB=false
   end
 
   local plural = ''
@@ -192,7 +205,7 @@ add_to_chat(200,'========== soloSkillchain ==========')
       errlog("ABORT : 'Dark Arts' required and not ready")
       return
     else
-      commandSoloSC = commandSoloSC..'input /ja "Dark Arts" <me>;wait 1;'
+      commandSoloSC = commandSoloSC..'input /ja "Dark Arts" <me>;wait 1.5;'
     end
   end  
   
@@ -293,9 +306,9 @@ add_to_chat(200,'========== soloSkillchain ==========')
 	  end
 
 	  if i<nbSC then
-	    -- "+1" because we need one second after the cast to be able to JA
+	    -- "+1" because we need one second after the cast to be able to JA or start casting MB
 	    commandCurrentRound = commandCurrentRound..'wait '..tostring(wait.beforeNextSpell + 1)..';'
-	  end --if i<nbSC
+	  end --if i<nbSC or MB==true
 	else
 	    commandCurrentRound = commandCurrentRound..'wait 1;'
 	end --if(i>0)
@@ -305,7 +318,28 @@ add_to_chat(200,'========== soloSkillchain ==========')
 -- LOOP END
 ------------
 
-  --add_to_chat(debug.color.default,commandSoloSC)  
+  if MB then
+    local spellMB = ''
+    if elementEnd=='Fusion' or elementEnd=='Liquefaction' then
+      spellMB = 'Fire V'
+    elseif elementEnd=='Gravitation' or elementEnd=='Scission' then
+      spellMB = 'Stone V'
+    elseif elementEnd=='Distortion' or elementEnd=='Induration' then
+      spellMB = 'Blizzard V'
+    elseif elementEnd=='Fragmentation' or elementEnd=='Impaction' then
+      spellMB = 'Thunder V'
+    elseif elementEnd=='Reverberation' then
+      spellMB = 'Water V'
+    elseif elementEnd=='Detonation' then
+      spellMB = 'Aero V'
+    end
+    if spellMB~='' then 
+      -- only a little wait is needed, we already waited for seconds corresponding to castTime
+      commandSoloSC = commandSoloSC..'wait 1;input /ma "'..spellMB..'" <t>'
+    end
+  end
+
+  --add_to_chat(200,commandSoloSC)  -- for debug purpose
   send_command(commandSoloSC)
 end
 

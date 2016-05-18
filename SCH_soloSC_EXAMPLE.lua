@@ -39,7 +39,7 @@ function job_self_command(cmdParams, eventArgs)
       errlog('missing required parameters for function soloSkillchain')
       return
     else
-      soloSkillchain(cmdParams[2],cmdParams[3],cmdParams[4])
+      soloSkillchain(cmdParams[2],cmdParams[3],cmdParams[4],cmdParams[5])
     end
   end
 -- maybe some other stuff
