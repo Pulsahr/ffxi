@@ -116,6 +116,15 @@ Usage example :
 /console gs c soloSC 1 Fusion true true
 => will do 1 SC Fusion and cast Fire V for magic burst, with no information displayed in party chat
 --]]
+soloSC = {}
+soloSC.active = false
+soloSC.steps = {}
+soloSC.currentStep = 0
+soloSC.params = {}
+soloSC.params.nbSC = 0
+soloSC.params.elementEnd = ''
+soloSC.params.MB = false
+soloSC.params.STFU = false
 function soloSkillchain(nbSC,elementEnd,MB,STFU)
 --**************************************************
 -- CONSTANTS
@@ -216,7 +225,7 @@ add_to_chat(200,'========== soloSkillchain ==========')
     commandSoloSC = commandSoloSC..'input /p Starting '..tostring(nbSC)..' Skillchain'..plural..' : '
 	for i=1,nbSC,1 do
 	  if i>1 then commandSoloSC = commandSoloSC..',' end
-	  commandSoloSC = commandSoloSC..' '..spellsSC[i].SC
+	  commandSoloSC = commandSoloSC..'['..spellsSC[i].SC..']'
 	end -- for
 	commandSoloSC = commandSoloSC..' <call20>;'
   end --if not STFU
@@ -261,7 +270,15 @@ add_to_chat(200,'========== soloSkillchain ==========')
 	    helixUsed.dark=true
 	  end --if helixUsed.dark==true
     end -- if spellsSC[i].magic =='Noctohelix'
-	
+    --[[
+    if not STFU and i~=1 then
+      if(i==0) then 
+        commandCurrentRound = commandCurrentRound..'input /p '..info.skillchain[ spellsSC[i+1].SC ].MB..'  for next MB;'
+      else
+        commandCurrentRound = commandCurrentRound..'input /p '..info.skillchain[ spellsSC[i].SC ].MB..'  for next MB;'
+      end
+    end
+    --]]
     commandCurrentRound = commandCurrentRound..'input /ja Immanence <me>;wait '..tostring(wait.postImmanence)..';'
     commandCurrentRound = commandCurrentRound..'input /ma '..spellsSC[i].magic..' <t>;'
 	
@@ -287,8 +304,8 @@ add_to_chat(200,'========== soloSkillchain ==========')
 
 	-- info sur la SC en chan pt
 	if not STFU and i>0 then
-	  commandCurrentRound = commandCurrentRound..'input /p ['..spellsSC[i].SC..'] in '..tostring(spellsSC[i].castTime)..'s : '
-      commandCurrentRound = commandCurrentRound..'MB '..info.skillchain[ spellsSC[i].SC ].MB
+	  commandCurrentRound = commandCurrentRound..'input /p ['..spellsSC[i].SC..'] in '..tostring(spellsSC[i].castTime)..'s'
+      commandCurrentRound = commandCurrentRound..' MB '..info.skillchain[ spellsSC[i].SC ].MB
 	  if i<nbSC then -- we're not done yet, we inform the pt
 	    commandCurrentRound = commandCurrentRound..' (next SC : ['..spellsSC[i+1].SC..'] in ~'..tostring(wait.beforeNextSpell + wait.postImmanence + castTimeSpellAfter)..'s)'
 	  end --if i<nbSC
@@ -299,12 +316,12 @@ add_to_chat(200,'========== soloSkillchain ==========')
 	  commandCurrentRound = commandCurrentRound.."input /echo ========== DONE ==========;"
 	end
 	
-    commandCurrentRound = commandCurrentRound..'wait '..tostring(spellsSC[i].castTime)..';'
+    commandCurrentRound = commandCurrentRound..'wait '..tostring(spellsSC[i].castTime - 1)..';'
 	
 	if(i>0) then
 	  if not STFU then
 	    -- MB NOW !
-	    commandCurrentRound = commandCurrentRound..'input /p MB '..info.skillchain[ spellsSC[i].SC ].MB..' NOW !;'
+	    commandCurrentRound = commandCurrentRound..'input /p MB window up !; wait 1;' --..info.skillchain[ spellsSC[i].SC ].MB..' NOW !;'
 	  end
 
 	  if i<nbSC then

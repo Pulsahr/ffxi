@@ -2,7 +2,6 @@ function get_sets()
   -- Load and initialize the include file.
   mote_include_version = 2
   include('Mote-Include.lua')
-  include('common_info.skillchain.lua')
   include('SCH_soloSC.lua')
 end
 
@@ -42,7 +41,32 @@ function job_self_command(cmdParams, eventArgs)
       soloSkillchain(cmdParams[2],cmdParams[3],cmdParams[4],cmdParams[5])
     end
   end
+  
+  if cmdParams[1] == 'stopSoloSC' then
+    soloSkillchainAbort('abort from command')
+  end
 -- maybe some other stuff
+end
+
+function job_aftercast(spell, action, spellMap, eventArgs)
+  -- soloSC stuff
+  if (soloSC.active==true) and (spell.english==soloSC.step.spell or spell.english=='Immanence') then
+    if (spell.english==soloSC.step.spell) then
+      if (not spell.interrupted) then
+        soloSkillchainStep()
+      else
+        soloSkillchainAbort('interrupted')
+      end
+    end
+    
+    if (spell.english=='Immanence') then
+      state.Buff["Immanence"] = buffactive["Immanence"] or false
+      if (not state.Buff["Immanence"]) and spell.interrupted then
+        soloSkillchainAbort('Immanence failed')
+      end
+    end
+  end
+  -- end of soloSC stuff
 end
 
 
@@ -56,9 +80,9 @@ function getNbStratagems()
     -- returns recast in seconds.
     local allRecasts = windower.ffxi.get_ability_recasts()
     local stratsRecast = allRecasts[231]
-    local maxStrategems = math.floor((player.main_job_level + 10) / 20)
-    local fullRechargeTime = 4*60
-    local currentCharges = math.floor(maxStrategems - maxStrategems * stratsRecast / fullRechargeTime)
+    local maxStratagems = math.floor((player.main_job_level + 10) / 20)
+    local fullRechargeTime = 4*60 -- 4*40 after unlocking job point bonus
+    local currentCharges = math.floor(maxStratagems - maxStratagems * stratsRecast / fullRechargeTime)
     return currentCharges
 end
 
