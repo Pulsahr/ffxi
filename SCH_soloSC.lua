@@ -11,8 +11,6 @@ Don't ask me to enhance it to repeat itself until mob's death. This is botting t
 1. INCLUDES
 include this file in your SCH gearswap by copying it in addons/GearSwap/data/ and put at the bottom of your main SCH file :
 include('SCH_soloSC.lua')
-Also copy and include the info skillchain file :
-include('common_info.skillchain.lua')
 
 
 2. ADDING FUNCTIONS
@@ -28,9 +26,9 @@ function getNbStratagems()
     -- returns recast in seconds.
     local allRecasts = windower.ffxi.get_ability_recasts()
     local stratsRecast = allRecasts[231]
-    local maxStrategems = math.floor((player.main_job_level + 10) / 20)
-    local fullRechargeTime = 4*60 -- change 60 with 45 if you have unlocked the job point gift on stratagem recast
-    local currentCharges = math.floor(maxStrategems - maxStrategems * stratsRecast / fullRechargeTime)
+    local maxStratagems = math.floor((player.main_job_level + 10) / 20)
+    local fullRechargeTime = 4*60 -- change 60 with 40 if you have unlocked the job point gift about stratagem recast
+    local currentCharges = math.floor(maxStratagems - maxStratagems * stratsRecast / fullRechargeTime)
     return currentCharges
 end
 
@@ -42,14 +40,18 @@ function errlog(msg)
 end
 
 
-3. CUSTOM COMMAND
+3. EDITING SYSTEM FUNCTIONS
+
+--------------------------------------
+-- JOB SELF COMMAND
+--------------------------------------
 You need to add the custom command for calling the solo skillchain function.
 Find the "job_self_command" in your main script. If it doesn't exist, create it as follow :
 function job_self_command(cmdParams, eventArgs)
 -- insert code here
 end
 
-Insert the following code :
+Code to insert :
 
   if cmdParams[1] == 'soloSC' then
     if not cmdParams[2] or not cmdParams[3] then
@@ -59,17 +61,54 @@ Insert the following code :
       soloSkillchain(cmdParams[2],cmdParams[3],cmdParams[4],cmdParams[5])
     end
   end
+  
+  if cmdParams[1] == 'stopSoloSC' then
+    soloSkillchainAbort('abort from command')
+  end
+
+--------------------------------------
+-- JOB AFTERCAST
+--------------------------------------  
+Create the function job_aftercast, or if it already exists, edit it and insert the inner code at the end of the function (just before the "end").
+function job_aftercast(spell, action, spellMap, eventArgs)
+  
+  -- soloSC stuff
+  if (soloSC.active==true) and (spell.english==soloSC.step.spell or spell.english=='Immanence') then
+    if (spell.english==soloSC.step.spell) then
+      if (not spell.interrupted) then
+        soloSkillchainStep()
+      else
+        soloSkillchainAbort('interrupted')
+      end
+    end
+    
+    if (spell.english=='Immanence') then
+      state.Buff["Immanence"] = buffactive["Immanence"] or false
+      if (not state.Buff["Immanence"]) and spell.interrupted then
+        soloSkillchainAbort('Immanence failed')
+      end
+    end
+  end
+  -- end of soloSC stuff
+
+end
+
+--------------------------------------
+-- JOB STATUS CHANGE
+--------------------------------------  
+This one is not mandatory, but will be helpful
+function job_status_change(new_status, old_status)
+  if (new_status=='resting') and (soloSC.active==true) then
+    soloSkillchainAbort()
+  end
+end
  
 
 -- #########################
--- INFORMATION
+-- WHAT YOU NEED TO EDIT HERE
 -- #########################
 
-This file contains only the functions required for the soloSC command :
-soloSkillchain
-getSpellsForSC
-
-Make sure you adjusted the constants in both functions.
+Make sure you adjusted the constants in the last function getSpellsForSC.
 the constants part looks like this :
 
 --**************************************************
@@ -77,22 +116,28 @@ the constants part looks like this :
 some variables to adjust
 --**************************************************
 
-The constants in second function are more critical, they contains the cast time for helix and tier1. If too short, you won't be able to cast Immanence, screwing the whole solo SC process.
+The constants in this function are very important : they define the wait time before casting the next spell, respecting the MB window. So be as accurate as possible.
+If you're not sure, prefer longer cast time or default values. Default is 4s for tier1, and 8s for helix.
 
 
 -- #########################
 -- KNOWN ISSUES
 -- #########################
 
-1. Why Distortion doesn't work ?
-You need some time after a helix to be able to skillchain. If your cast time is 6s, put 7 in the constants and try again. It worked for me.
-My hypothesis : it needs the first tick of dot before the next immannenced spell lands. Didn't check. Don't plan to. Feel free to !
+1. Why Distortion doesn't always work ?
+Im' not sure about this, but I have an hypothesis : it needs the first tick of dot before the next immannenced spell lands. Didn't check. Don't plan to. Feel free to !
 
-2. getStratagems function doesn't work correctly
-You probably have a decreased recast time on your stratagems. If you leave it as is, you won't have error, but might be incorrectly rejected for a lack of stratagems. Replace the 60 with 45 as said in the comment on the desired line.
+2. Sometimes my Gravitation fails
+You probably tried a Gravitation while Noctohelix was still on recast.
+
+3. getStratagems function doesn't work correctly
+You probably have a decreased recast time on your stratagems. If you leave it as is, you won't have error, but might be incorrectly rejected for a lack of stratagems. Replace the 60 with 40 as said in the comment on the desired line.
 
 3. The last skillchain didn't happen
-You probably made a long skillchain combo (3 ?), and the last one was a bit off the skillchain window. Tune your cast time, or reduce your number of SC.
+You probably made a long skillchain combo (3 ?), and the last one was a bit off the skillchain window. Reduce your number of SC if this persists.
+
+1. I made the first cast instant and nothing happens
+That problem is gearswap specific : when a instant spell occurs, some "events" are not triggered, like the job_aftercast used to step forward in the solo skillchain process. I'm working on a fix, but it needs time.
 --]]
 
 --------------------------------------
@@ -117,21 +162,10 @@ Usage example :
 => will do 1 SC Fusion and cast Fire V for magic burst, with no information displayed in party chat
 --]]
 soloSC = {}
-soloSC.active = false
-soloSC.steps = {}
-soloSC.currentStep = 0
+soloSC.step = {}
 soloSC.params = {}
-soloSC.params.nbSC = 0
-soloSC.params.elementEnd = ''
-soloSC.params.MB = false
-soloSC.params.STFU = false
-function soloSkillchain(nbSC,elementEnd,MB,STFU)
---**************************************************
--- CONSTANTS
--- If you have access to helix II and are ok to use them, set to true
-local useHelixII = false
---**************************************************
 
+function soloSkillchain(nbSC,elementEnd,MB,STFU)
 add_to_chat(200,'========== soloSkillchain ==========')
 
   elementEnd = tostring(elementEnd)
@@ -200,10 +234,6 @@ add_to_chat(200,'========== soloSkillchain ==========')
   spellsSC = getSpellsForSC(nbSC,elementEnd)
 
  
-  local wait = {}
-  wait.postImmanence = 1
-  local commandSoloSC = '' -- 
-
   -- Checking you didn't forget Dark Arts
   state.Buff["Dark Arts"] = buffactive["Dark Arts"] or false
   state.Buff["Addendum: Black"] = buffactive["Addendum: Black"] or false
@@ -214,154 +244,233 @@ add_to_chat(200,'========== soloSkillchain ==========')
       errlog("ABORT : 'Dark Arts' required and not ready")
       return
     else
-      commandSoloSC = commandSoloSC..'input /ja "Dark Arts" <me>;wait 1.5;'
-      -- we deactivate MB option, to not mess with stratagem count expected by player
-      MB = false
+      soloSC.darkArtsCast = true
+      send_command('input /ja "Dark Arts" <me>')
     end
-  end  
-  
-  -- Let's build the command. And if not STFU, let's build the chat spam too muahaha.
-  if not STFU then
-    commandSoloSC = commandSoloSC..'input /p Starting '..tostring(nbSC)..' Skillchain'..plural..' : '
-	for i=1,nbSC,1 do
-	  if i>1 then commandSoloSC = commandSoloSC..',' end
-	  commandSoloSC = commandSoloSC..'['..spellsSC[i].SC..']'
-	end -- for
-	commandSoloSC = commandSoloSC..' <call20>;'
-  end --if not STFU
+  end
+
 
     -- If twice the same helix is used : abort
   local helixUsed = {}
   helixUsed.light = false
   helixUsed.dark = false
   local msgDebug = ''
-
-------------
--- ZE LOOP
-
+  
+  -- let's make a loop to check that there's no trouble with helix used too much
   for i=0,nbSC,1 do
-  commandCurrentRound = ''
-    -- Multiple helix usage check
     if spellsSC[i].magic =='Luminohelix' then
       if helixUsed.light==true then
-	    -- already used, recast will prevent to chain
-		if not (useHelixII==true) then
 	      errlog("Recast problem : Luminohelix required more than once, aborting.")
 	      return
-		else
-		  spellsSC[i].magic = '"Luminohelix II"'
-		  spellsSC[i].castTime = spellsSC[i].castTime+1
-		end -- if not (useHelixII==true)
-	  else
-	    helixUsed.light=true
-	  end
+      else
+        helixUsed.light=true
+      end
     end -- if spellsSC[i].magic =='Luminohelix'
 
     if spellsSC[i].magic =='Noctohelix' then
       if helixUsed.dark==true then
-	    if not (useHelixII==true) then
 	      errlog("Recast problem : Noctohelix required more than once, aborting.")
 	      return
-		else
-		  spellsSC[i].magic = '"Noctohelix II"'
-		  spellsSC[i].castTime = spellsSC[i].castTime+1
-		end -- if not (useHelixII==true)
-	  else
-	    helixUsed.dark=true
-	  end --if helixUsed.dark==true
-    end -- if spellsSC[i].magic =='Noctohelix'
-    --[[
-    if not STFU and i~=1 then
-      if(i==0) then 
-        commandCurrentRound = commandCurrentRound..'input /p '..info.skillchain[ spellsSC[i+1].SC ].MB..'  for next MB;'
       else
-        commandCurrentRound = commandCurrentRound..'input /p '..info.skillchain[ spellsSC[i].SC ].MB..'  for next MB;'
+        helixUsed.dark=true
+      end --if helixUsed.dark==true
+    end --if spellsSC[i].magic =='Noctohelix'
+  end
+  
+
+------------
+-- OK we're good, everything is checked, let's start this shit
+
+if (soloSC.active==true) then
+  --aborting another soloSC if any
+  soloSC.params.STFU = true -- let's not inform the party that we abort the previous, it is confusing.
+  soloSkillchainResetParameters('starting a new one')
+end
+
+  soloSC.active = true
+  soloSC.spells = spellsSC
+  soloSC.step.current = 0
+  soloSC.params.nbSC = nbSC
+  soloSC.params.elementEnd = elementEnd
+  soloSC.params.MB = MB
+  soloSC.params.STFU = STFU
+  
+  -- Building the first party sentence
+  local commandSoloSC = ''
+  if not STFU then
+    commandSoloSC = commandSoloSC..'input /p Starting '..tostring(nbSC)..' Skillchain'..plural..' : '
+	for i=1,nbSC,1 do
+	  if i>1 then commandSoloSC = commandSoloSC..',' end
+	  commandSoloSC = commandSoloSC..'['..spellsSC[i].SC..']'
+	end -- for
+	send_command(commandSoloSC..' <call20>;input /jobemote run')
+  end --if not STFU
+  
+  soloSkillchainStep()
+end
+
+--------------------------------------
+-- SOLO SKILLCHAIN STEP
+--------------------------------------
+--[[
+Called first by soloSkillchain, then by job_aftercast
+This function actually send the inputs for JA and magic
+Depending on original options, it can input information in party chat
+Parameters were initialized by soloSkillchain, and are stored in : 
+soloSC.params.nbSC
+soloSC.params.elementEnd
+soloSC.params.MB
+soloSC.params.STFU
+
+Other useful stuff is in : 
+soloSC.active = true
+soloSC.spells = spellsSC
+soloSC.step.current = 0
+soloSC.step.spell = ''
+soloSC.timeLanded = 0
+--]]
+function soloSkillchainStep()
+  debugFct('soloSkillchainStep')
+  -- canceling situations
+  if soloSC.active~=true then return end
+
+  local wait = {}
+  wait.postImmanence = 1.5
+  wait.precast = 3 -- you need a little wait after the previous job_aftercast or you will have "unable to use job ability." or "unable to cast spell at this time."
+  
+  -- if we are at a step after a SC, we inform the party that MB is on now
+  if (not STFU) and (soloSC.step.current > 1) then
+    send_command('wait 0.5;input /p MB window up NOW !')
+  end
+  
+  --add_to_chat(200,'step num '..tostring(soloSC.step.current)) -- ########## for debug purpose
+
+  if (soloSC.step.current <= soloSC.params.nbSC) then
+
+    -- We build a one step full command
+    commandStep = ''
+    if(soloSC.step.current > 0) then
+      commandStep = 'wait '..tostring(wait.precast)..';'
+    else
+      if(soloSC.darkArtsCast == true) then
+        -- we need a wait between Dark Arts and the very first spell.
+        commandStep = 'wait 1.5;'
       end
     end
-    --]]
-    commandCurrentRound = commandCurrentRound..'input /ja Immanence <me>;wait '..tostring(wait.postImmanence)..';'
-    commandCurrentRound = commandCurrentRound..'input /ma '..spellsSC[i].magic..' <t>;'
-	
-	-- calculating waiting times
-  -- the higher the SC, the shorter the SC window to next
-	wait.windowMB = 7
-  if (i==3) then
-	  wait.windowMB = 6
-	elseif (i==4) then
-	  wait.windowMB = 4
-	end
 
-	wait.beforeNextSpell = spellsSC[i].castTime -- between "/p MB NOW !" and next Immanence
-	castTimeSpellAfter = 0
-	if(i<nbSC) then
-	  castTimeSpellAfter = spellsSC[i+1].castTime
-	  -- if this is not the first spell, we maximise the MB window to 7s. 8 sometime fails to SC.
-	  if (i>0) then
-	    wait.beforeNextSpell = math.max(0,(wait.windowMB - castTimeSpellAfter - wait.postImmanence))
-	  end
-	end
---add_to_chat(200,tostring(i)..' : '..spellsSC[i].magic..', cast='..tostring(spellsSC[i].castTime)..', wait.beforeNextSpell='..tostring(wait.beforeNextSpell))
-
-	-- info sur la SC en chan pt
-	if not STFU and i>0 then
-	  commandCurrentRound = commandCurrentRound..'input /p ['..spellsSC[i].SC..'] in '..tostring(spellsSC[i].castTime)..'s'
-      commandCurrentRound = commandCurrentRound..' MB '..info.skillchain[ spellsSC[i].SC ].MB
-	  if i<nbSC then -- we're not done yet, we inform the pt
-	    commandCurrentRound = commandCurrentRound..' (next SC : ['..spellsSC[i+1].SC..'] in ~'..tostring(wait.beforeNextSpell + wait.postImmanence + castTimeSpellAfter)..'s)'
-	  end --if i<nbSC
-	  commandCurrentRound = commandCurrentRound..';'
-	end -- if not STFU and i>0
-
-	if i==nbSC then 
-	  commandCurrentRound = commandCurrentRound.."input /echo ========== DONE ==========;"
-	end
-	
-    commandCurrentRound = commandCurrentRound..'wait '..tostring(spellsSC[i].castTime - 1)..';'
-	
-	if(i>0) then
-	  if not STFU then
-	    -- MB NOW !
-	    commandCurrentRound = commandCurrentRound..'input /p MB window up !; wait 1;' --..info.skillchain[ spellsSC[i].SC ].MB..' NOW !;'
-	  end
-
-	  if i<nbSC then
-	    -- "+1" because we need one second after the cast to be able to JA or start casting MB
-	    commandCurrentRound = commandCurrentRound..'wait '..tostring(wait.beforeNextSpell + 1)..';'
-	  end --if i<nbSC or MB==true
-	else
-	    commandCurrentRound = commandCurrentRound..'wait 1;'
-	end --if(i>0)
-	commandSoloSC = commandSoloSC..commandCurrentRound
-  end  -- for
-
--- LOOP END
-------------
-
-  if MB then
-    local spellMB = ''
-    if elementEnd=='Fusion' or elementEnd=='Liquefaction' then
-      spellMB = 'Fire V'
-    elseif elementEnd=='Gravitation' or elementEnd=='Scission' then
-      spellMB = 'Stone V'
-    elseif elementEnd=='Distortion' or elementEnd=='Induration' then
-      spellMB = 'Blizzard V'
-    elseif elementEnd=='Fragmentation' or elementEnd=='Impaction' then
-      spellMB = 'Thunder V'
-    elseif elementEnd=='Reverberation' then
-      spellMB = 'Water V'
-    elseif elementEnd=='Detonation' then
-      spellMB = 'Aero V'
+    -- calculating waiting times
+    -- the higher the SC, the shorter the SC window
+    wait.windowMB = 7
+    if (soloSC.step.current==3) then
+      wait.windowMB = 6
+    elseif (soloSC.step.current==4) then
+      wait.windowMB = 4
     end
-    if spellMB~='' then 
-      -- only a little wait is needed, we already waited for seconds corresponding to castTime
-      commandSoloSC = commandSoloSC..'wait 1;input /ma "'..spellMB..'" <t>'
+    
+    -- Special actions are required once the SC is fully started
+    wait.beforeNextSpell = 0
+    if(soloSC.step.current > 1) then
+      
+      -- how long do we have to wait before starting casting the next spell ?
+      wait.beforeNextSpell = math.max(1,(wait.windowMB - spellsSC[soloSC.step.current].castTime - wait.postImmanence))
+      
+      commandStep = commandStep..'wait '..tostring(wait.beforeNextSpell)..';'
+    end -- if(soloSC.step.current > 1)
+    
+    -- Cast the spell
+    commandStep = commandStep..'input /ja Immanence <me>;wait '..tostring(wait.postImmanence)..';'
+    commandStep = commandStep..'input /ma '..spellsSC[soloSC.step.current].magic..' <t>;'
+    soloSC.step.spell = spellsSC[soloSC.step.current].magic
+    
+    
+    -- SC info for party
+    if (not soloSC.params.STFU) and (soloSC.step.current > 0) then
+      commandStep = commandStep..'input /p ['..spellsSC[soloSC.step.current].SC..'] in '..tostring(spellsSC[soloSC.step.current].castTime)..'s'
+      commandStep = commandStep..' MB '..info.skillchain[ spellsSC[soloSC.step.current].SC ].MB
+      if (soloSC.step.current < soloSC.params.nbSC) then -- we're not done yet, we inform the pt
+        commandStep = commandStep..' (next SC : ['..spellsSC[soloSC.step.current+1].SC..'] in ~'..tostring(wait.beforeNextSpell + wait.postImmanence + spellsSC[soloSC.step.current+1].castTime)..'s)'
+      end --if i<nbSC
+      commandStep = commandStep..';'
+    end -- if not STFU and i>0
+    
+    --add_to_chat(200,commandStep) -- ########### For debug purpose
+    send_command(commandStep)
+
+    -- We are ready for the next step
+    soloSC.step.current = soloSC.step.current + 1
+
+
+  else -- [if (soloSC.step.current <= soloSC.params.nbSC)]
+    add_to_chat(200,'========== DONE ==========')
+    
+    if (soloSC.params.MB==true) then
+      local spellMB = ''
+      if soloSC.params.elementEnd=='Fusion' or soloSC.params.elementEnd=='Liquefaction' then
+        spellMB = 'Fire V'
+      elseif soloSC.params.elementEnd=='Gravitation' or soloSC.params.elementEnd=='Scission' then
+        spellMB = 'Stone V'
+      elseif soloSC.params.elementEnd=='Distortion' or soloSC.params.elementEnd=='Induration' then
+        spellMB = 'Blizzard V'
+      elseif soloSC.params.elementEnd=='Fragmentation' or soloSC.params.elementEnd=='Impaction' then
+        spellMB = 'Thunder V'
+      elseif soloSC.params.elementEnd=='Reverberation' then
+        spellMB = 'Water V'
+      elseif soloSC.params.elementEnd=='Detonation' then
+        spellMB = 'Aero V'
+      end
+
+      if spellMB~='' then 
+        add_to_chat(200,'starting MB with '..spellMB)
+        send_command('wait '..tostring(wait.precast)..';input /ma "'..spellMB..'" <t>')
+      end
+
+    end -- if (soloSC.params.MB==true)
+    
+    soloSkillchainResetParameters() -- poof
+  end -- ELSE [if (soloSC.step.current <= soloSC.params.nbSC)]
+
+
+end -- function soloSkillchainStep
+
+
+--------------------------------------
+-- SOLO SKILLCHAIN ABORT & RESET PARAMETERS
+--------------------------------------
+--[[
+this function purpose is only to abort an ongoing SC : reset parameters and display an error message
+--]]
+function soloSkillchainAbort(reason)
+  if (soloSC.active == true) then
+      local msgReason=''
+      if reason==nil then reason='unknown' end
+      msgReason = ': '..reason
+      add_to_chat(167,'aborting current soloSkillchain : '..msgReason)
+
+    if (not soloSC.params.STFU) then
+      -- we inform the party we abort the SC
+      send_command("input /p Skillchain ABORTED")
     end
   end
 
-  --add_to_chat(200,commandSoloSC)  -- for debug purpose
-  send_command(commandSoloSC)
+  soloSkillchainResetParameters()
 end
 
+function soloSkillchainResetParameters()
+  soloSC.active = false
+  soloSC.timeLanded = 0
+  soloSC.spells = {}
+  soloSC.step.current = 0
+  soloSC.step.spell = ''
+  soloSC.darkArtsCast = false
+
+  soloSC.params.nbSC = 0
+  soloSC.params.elementEnd = ''
+  soloSC.params.MB = false
+  soloSC.params.STFU = false
+  
+end
+
+soloSkillchainResetParameters() -- will set default values to parameters
 
 
 --------------------------------------
