@@ -254,7 +254,6 @@ add_to_chat(200,'========== soloSkillchain ==========')
   local helixUsed = {}
   helixUsed.light = false
   helixUsed.dark = false
-  local msgDebug = ''
   
   -- let's make a loop to check that there's no trouble with helix used too much
   for i=0,nbSC,1 do
@@ -330,7 +329,6 @@ soloSC.step.spell = ''
 soloSC.timeLanded = 0
 --]]
 function soloSkillchainStep()
-  debugFct('soloSkillchainStep')
   -- canceling situations
   if soloSC.active~=true then return end
 
